@@ -9,13 +9,14 @@
  * 5. Login with SIWE (wallet B)
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useConnectWallet,
   useLoginWithSiwe,
   usePrivy,
   useWallets,
 } from "@privy-io/react-auth";
+import { injected, useConnect } from "wagmi";
 
 export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
@@ -197,6 +198,60 @@ export default function Home() {
     return currentStep;
   };
 
+  const { connectAsync } = useConnect()
+  const prevAddressRef = useRef<string | undefined>(undefined)
+  const [isProcessingAccountChange, setIsProcessingAccountChange] = useState(false)
+
+
+
+
+  useEffect(() => {
+    const handleAccountChange = async () => {
+      if (!ready || !address) return
+
+      if (prevAddressRef.current === undefined) {
+        prevAddressRef.current = address
+        return
+      }
+
+      if (prevAddressRef.current === address) return
+
+      if (isProcessingAccountChange) return
+
+      const oldAddress = prevAddressRef.current
+      prevAddressRef.current = address
+
+      log('--- WALLET ACCOUNT CHANGE DETECTED ---')
+      log(`Previous: ${oldAddress}`)
+      log(`New: ${address}`)
+      setIsProcessingAccountChange(true)
+
+
+      setError(null)
+
+      try {
+        handleLogoutDisconnect()
+
+        log('Step 3: Calling connectAsync()...')
+        await connectAsync({ connector: injected() })
+        log('connectAsync() completed')
+        console.log('wallets', wallets)
+
+        log('Step 4: Attempting SIWE with new wallet...')
+        await handleLoginSiwe()
+      } catch (e: any) {
+        log(`❌ FAILED: ${e.message}`)
+        setError(e.message)
+        log('NOTE: Cannot get linked embedded wallet with wallet B')
+      }
+      finally {
+        setIsProcessingAccountChange(false)
+      }
+    }
+
+    handleAccountChange()
+  }, [address, ready])
+
   const activeStep = getActiveStep();
 
   return (
@@ -236,8 +291,8 @@ export default function Home() {
             <b>
               {linkedWallets.length > 0
                 ? linkedWallets
-                    .map((w) => `${w.slice(0, 6)}...${w.slice(-4)}`)
-                    .join(", ")
+                  .map((w) => `${w.slice(0, 6)}...${w.slice(-4)}`)
+                  .join(", ")
                 : "none"}
             </b>
           </div>
@@ -252,12 +307,11 @@ export default function Home() {
             <div key={step} className="flex items-center">
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
-                  ${
-                    activeStep === step
-                      ? "bg-blue-500 text-white ring-4 ring-blue-200"
-                      : activeStep > step
-                        ? "bg-green-500 text-white"
-                        : "bg-gray-200 text-gray-500"
+                  ${activeStep === step
+                    ? "bg-blue-500 text-white ring-4 ring-blue-200"
+                    : activeStep > step
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-200 text-gray-500"
                   }`}
               >
                 {activeStep > step ? "✓" : step}
@@ -285,10 +339,9 @@ export default function Home() {
           onClick={handleConnect}
           disabled={isLoading || authenticated}
           className={`px-4 py-3 rounded-lg font-medium transition-all
-            ${
-              activeStep === 1 || activeStep === 4
-                ? "bg-blue-500 hover:bg-blue-600 text-white ring-2 ring-blue-300"
-                : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+            ${activeStep === 1 || activeStep === 4
+              ? "bg-blue-500 hover:bg-blue-600 text-white ring-2 ring-blue-300"
+              : "bg-blue-100 text-blue-700 hover:bg-blue-200"
             }
             disabled:opacity-50 disabled:cursor-not-allowed`}
         >
@@ -299,10 +352,9 @@ export default function Home() {
           onClick={handleLoginSiwe}
           disabled={isLoading || !address || authenticated}
           className={`px-4 py-3 rounded-lg font-medium transition-all
-            ${
-              activeStep === 2 || activeStep === 5
-                ? "bg-green-500 hover:bg-green-600 text-white ring-2 ring-green-300"
-                : "bg-green-100 text-green-700 hover:bg-green-200"
+            ${activeStep === 2 || activeStep === 5
+              ? "bg-green-500 hover:bg-green-600 text-white ring-2 ring-green-300"
+              : "bg-green-100 text-green-700 hover:bg-green-200"
             }
             disabled:opacity-50 disabled:cursor-not-allowed`}
         >
@@ -313,10 +365,9 @@ export default function Home() {
           onClick={handleLogoutDisconnect}
           disabled={isLoading || !authenticated}
           className={`px-4 py-3 rounded-lg font-medium transition-all
-            ${
-              activeStep === 3
-                ? "bg-orange-500 hover:bg-orange-600 text-white ring-2 ring-orange-300"
-                : "bg-orange-100 text-orange-700 hover:bg-orange-200"
+            ${activeStep === 3
+              ? "bg-orange-500 hover:bg-orange-600 text-white ring-2 ring-orange-300"
+              : "bg-orange-100 text-orange-700 hover:bg-orange-200"
             }
             disabled:opacity-50 disabled:cursor-not-allowed`}
         >
